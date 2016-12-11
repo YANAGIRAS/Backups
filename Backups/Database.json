@@ -1,0 +1,9 @@
+﻿[
+  {
+    "instanceName": "(local)\\Pleasanter",
+    "dbName": "Implem.Pleasanter",
+    "saPassword": "passwd",
+    "backupPath": "C:\\BackupData",
+    "retensionPeriod": "5"
+  }
+]
