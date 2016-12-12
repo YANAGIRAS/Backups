@@ -4,6 +4,6 @@
     "dbName": "Implem.Pleasanter",
     "saPassword": "passwd",
     "backupPath": "C:\\BackupData",
-    "retensionPeriod": "5"
+    "retensionPeriod": 5
   }
 ]

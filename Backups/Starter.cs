@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
-using System.IO.Compression;
 using System.IO;
 using System.Linq;
 using Implem.Libraries.Utilities;
+using Ionic.Zip;
+using Ionic.Zlib;
 
 namespace Backups
 {
@@ -12,14 +13,14 @@ namespace Backups
     {
         static void Main(string[] args)
         {
-            Files.Read(@"C:\Users\ophelia\Desktop\Backups\Backups\Database.json").Deserialize<List<Config>>()
+            Files.Read(@"C:\Backups\backupConfig.json").Deserialize<List<Config>>()
                 .ForEach(config => backupDatabese(config));
         }
 
 
         private static void backupDatabese(Config config)
         {
-            var backupFileName = config.backupPath + @"\" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var backupFileName = config.backupPath + @"\" + config.dbName + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".bak";
             string backupSql = string.Format(
                 @"DBCC SHRINKDATABASE(N'" + config.dbName +
                 @"') BACKUP DATABASE [" + config.dbName +
@@ -29,7 +30,6 @@ namespace Backups
                 @";Database=master;UID=sa;PWD=" + config.saPassword +
                 @";Connection Timeout=30;";
 
-            // バックアップ
             using (SqlConnection sqlConnection = new SqlConnection(connectionString))
             using (SqlCommand slqCmd = new SqlCommand(backupSql, sqlConnection))
             {
@@ -38,25 +38,24 @@ namespace Backups
                 slqCmd.ExecuteNonQuery();
             }
 
-            // 圧縮とファイル削除
-            using (FileStream zipFile = new FileStream(backupFileName + ".zip", FileMode.Create))
-            using (ZipArchive archive = new ZipArchive(zipFile, ZipArchiveMode.Update))
+            using (ZipFile zip = new ZipFile())
             {
-                archive.CreateEntryFromFile(
-                    backupFileName,
-                    Path.GetFileNameWithoutExtension(backupFileName));
-                File.Delete(backupFileName);
+                zip.UseZip64WhenSaving = Zip64Option.AsNecessary;
+                zip.AlternateEncoding = System.Text.Encoding.GetEncoding("shift_jis");
+                zip.AlternateEncodingUsage = ZipOption.AsNecessary;
+                zip.AddFile(backupFileName, ".");
+                zip.Save(config.backupPath + @"\" + Path.GetFileNameWithoutExtension(backupFileName) + ".zip");
             }
+            File.Delete(backupFileName);
             Console.WriteLine(string.Format("バックアップが完了しました[{0}] ", backupFileName));
 
-            // ZIPファイル「限定で」過去分削除
-            // 作成日時ソートなのでファイルシステムトンネリング機能に注意
-            var zipfiles = Directory.GetFiles(config.backupPath, @"*.zip")
-                .OrderByDescending(file => File.GetCreationTime(file)).ToArray();
-            for(int count = zipfiles.Length - 1; config.retensionPeriod.ToInt() <= count; count--)
-            {
-                File.Delete(zipfiles[count]);
-            }
+
+            Directory.GetFiles(config.backupPath, @"*.zip")
+                .OrderByDescending(file => File.GetCreationTime(file))
+                .Select((o, i) => new { Path = o, Index = i })
+                .Where(o => o.Index >= config.retensionPeriod)
+                .ForEach(o =>
+                    File.Delete(o.Path));
         }
     }
 }
